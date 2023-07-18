@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1><a href="https://arxiv.org/abs/2307.08182">Zero-Shot Image Harmonization with Generative Model Prior</a></h1>
+<h1><a href="https://arxiv.org/abs/2307.08182">Zero-Shot Image Harmonization with <br /> Generative Model Prior</a></h1>
 
 **[Jianqi Chen](https://windvchen.github.io/), [Zhengxia Zou](https://scholar.google.com.hk/citations?hl=en&user=DzwoyZsAAAAJ), [Yilan Zhang](https://scholar.google.com.hk/citations?hl=en&user=wZ4M4ecAAAAJ), [Keyan Chen](https://scholar.google.com.hk/citations?hl=en&user=5RF4ia8AAAAJ), and [Zhenwei Shi](https://scholar.google.com.hk/citations?hl=en&user=kNhFWQIAAAAJ)**
 
@@ -13,12 +13,12 @@
 
 ### Share us a :star: if this repo does help
 
-This is the official repository of ***Diff-Harmonization***. We are working on further improvements to this method (see **Appendix D** of the paper) to provide a better user experience, so stay tuned for more updates.
+This is the official repository of ***Diff-Harmonization***. We are working🏃🏃 on further improvements to this method (see **Appendix D** of the paper) to provide a better user experience, so stay tuned for more updates.
 
 If you encounter any question about the paper, please feel free to contact us. You can create an issue or just send email to me windvchen@gmail.com. Also welcome for any idea exchange and discussion.
 
 BTW:
-In the process of waiting for the final code, you may wish to pay attention to our [***INR-Harmonization***](https://github.com/WindVChen/INR-Harmonization) work that we recently released the final code. It is **the first dense pixel-to-pixel method applicable to high-resolution (*~6K*) images** without any hand-crafted filter design, based on *Implicit Neural Representation*,.
+In the process of waiting for the final code, you may wish to pay attention to our 😊[***INR-Harmonization***](https://github.com/WindVChen/INR-Harmonization) work that we recently released the final code. It is **the first dense pixel-to-pixel method applicable to high-resolution (*~6K*) images** without any hand-crafted filter design, based on *Implicit Neural Representation*,.
 
 ## Updates
 
@@ -30,10 +30,10 @@ In the process of waiting for the final code, you may wish to pay attention to o
 
 ## Table of Contents
 
-- [Abstract](#Abstract)
-- [Results](#Results)
-- [Citation & Acknowledgments](#Citation-&-Acknowledgments)
-- [License](#License)
+- [Abstract](#abstract)
+- [Results](#results)
+- [Citation & Acknowledgments](#citation--acknowledgments)
+- [License](#license)
 
 
 ## Abstract
@@ -46,12 +46,20 @@ Recent image harmonization methods have demonstrated promising results. However,
 
 ![Visual comparisons](assets/visualizations.png#pic_center)
 ![Visual comparisons2](assets/visualizations2.png#pic_center)
+
 ![Visual comparisons3](assets/visualizations3.png#pic_center)
 
 ## Citation & Acknowledgments
 If you find this paper useful in your research, please consider citing:
 ```
-
+@misc{chen2023zeroshot,
+      title={Zero-Shot Image Harmonization with Generative Model Prior}, 
+      author={Jianqi Chen and Zhengxia Zou and Yilan Zhang and Keyan Chen and Zhenwei Shi},
+      year={2023},
+      eprint={2307.08182},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
 ```
 
 ## License
