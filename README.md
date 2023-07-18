@@ -46,8 +46,7 @@ Recent image harmonization methods have demonstrated promising results. However,
 
 ![Visual comparisons](assets/visualizations.png#pic_center)
 ![Visual comparisons2](assets/visualizations2.png#pic_center)
-
-![Visual comparisons3](assets/visualizations3.png#pic_center)
+<div align=center><img src="assets/visualizations3.png" alt="Visual comparisons3"></div>
 
 ## Citation & Acknowledgments
 If you find this paper useful in your research, please consider citing:
