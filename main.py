@@ -22,9 +22,9 @@ def run_harmonization(image, prompts, diffusion_model, diffusion_steps, guidance
     elif m.shape[2] != 1:
         m = m[:, :, 0:1]
 
-    for ind in range(10):
+    for ind in range(args.harmonize_iterations):
         print(f"\n======================================================\n"
-              f"=================      Iteration:{ind}      ==================\n"
+              f"===============      Iteration:{ind}      ================\n"
               f"======================================================")
 
         """Do DDIM inversion. Collect all the intermediate latents in the inverse steps."""

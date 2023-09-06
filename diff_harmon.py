@@ -313,8 +313,10 @@ def attention_constraint_text_optimization(prompt, model, mask, latent, inversio
         # Collect all optimized text embeddings in the intermediate diffusion steps.
         intermediate_optimized_text_embed = []
 
+        pbar = tqdm(model.scheduler.timesteps[1:], desc="Optimize_text_embed")
+
         #  The DDIM should begin from 1, as the inversion cannot access X_T but only X_{T-1}
-        for ind, t in enumerate(tqdm(model.scheduler.timesteps[1:], desc="Optimize_text_embed")):
+        for ind, t in enumerate(pbar):
             for _ in range(args.op_style_iters):
                 controller = AttentionStore()
 
@@ -335,8 +337,8 @@ def attention_constraint_text_optimization(prompt, model, mask, latent, inversio
 
                 """For `loss_reg`, please refer to Eq. (4) in our paper."""
                 loss_reg = loss_func(optim_embeddings, basis_embeddings) * args.regulation_weight
-                print("loss: ", loss_emb.item() + loss_reg.item(), "\ttext_emb_loss: ", loss_emb.item(), "\treg_loss: ",
-                      loss_reg.item())
+                pbar.set_postfix_str(
+                    f"loss: {loss_emb.item() + loss_reg.item()}\ttext_emb_loss: {loss_emb.item()}\treg_loss: {loss_reg.item()}")
                 loss = loss_emb + loss_reg
 
                 loss.backward()

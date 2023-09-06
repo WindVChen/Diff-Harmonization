@@ -14,7 +14,7 @@
 ![DiffHarmon's preface](assets/Preface.png)
 
 <div align="center">
-<img src="assets/demo.gif">
+<img src="assets/demo.gif" alt="demo.gif">
 </div>
 
 ### Share us a :star: if this repo does help
@@ -83,7 +83,7 @@ Recent image harmonization methods have demonstrated promising results. However,
 
 The code supports either harmonize a single image, or harmonize a bunch of images. When the harmonization loop is finished, you can cherrypick the best one among a number of harmonized results. 
 
-Note that since Diff-Harmonization is a zero-shot method, the results are not always good. If generating bad results, we recommend you to try different initial environmental text to get the best results.
+(**Note:** Since Diff-Harmonization is a Zero-Shot method, the results are not always good. If generating bad results, we recommend you to try different initial environmental text to get the best results.)
 
 ### Harmonize a single image
 
