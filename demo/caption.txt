@@ -18,6 +18,3 @@ girl bright,girl dim
 girl sunny,girl dark
 girl sunny,girl dusky
 girl bright,girl warm
-girl bright,girl sunset
-girl bright,girl sunset
-girl bright,girl sunset

@@ -328,8 +328,6 @@ if __name__ == "__main__":
                 captions.append(c_list)
 
         for ind, img in enumerate(composite_images):
-            if ind < 20:
-                continue
             prefix = img.split("/")[-1][:-4]
             composite_image = Image.open(img)
             mask = Image.open(mask_images[ind])
