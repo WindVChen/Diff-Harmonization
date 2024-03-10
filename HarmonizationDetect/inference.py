@@ -13,7 +13,7 @@ import numpy as np
 
 model = HarmonizationDetect.utils.PPNetBulider.PPNet('resnet50', False, 2)
 model = model.cpu()
-state = torch.load('pretrained/bestModel.pth')
+state = torch.load('HarmonizationDetect/exp/bestModel.pth')
 # print("test:")
 model.load_state_dict(state)
 model.eval()
