@@ -139,13 +139,11 @@ python main.py --harmonize_iterations 10 --save_dir "./output" --images_root "./
 ## Citation & Acknowledgments
 If you find this paper useful in your research, please consider citing:
 ```
-@misc{chen2023zeroshot,
-      title={Zero-Shot Image Harmonization with Generative Model Prior}, 
-      author={Jianqi Chen and Zhengxia Zou and Yilan Zhang and Keyan Chen and Zhenwei Shi},
-      year={2023},
-      eprint={2307.08182},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV}
+@article{chen2023zero,
+  title={Zero-Shot Image Harmonization with Generative Model Prior},
+  author={Chen, Jianqi and Zou, Zhengxia and Zhang, Yilan and Chen, Keyan and Shi, Zhenwei},
+  journal={arXiv preprint arXiv:2307.08182},
+  year={2023}
 }
 ```
 
