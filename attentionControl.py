@@ -114,7 +114,7 @@ class AttentionControlEdit(AttentionStore, abc.ABC):
                         1 - alpha_words) * attn_repalce
                 attn[1:] = attn_repalce_new
             else:
-                "Fix self-attention maps. See details in Section 4.2 of our paper."
+                "Fix self-attention maps. See details in Section 3.2 of our paper-v2."
                 attn[1:] = self.replace_self_attention(attn_base, attn_repalce)
             attn = attn.reshape(self.batch_size * h, *attn.shape[2:])
         return attn
@@ -135,7 +135,8 @@ class AttentionReplace(AttentionControlEdit):
                  device='cpu'):
         super(AttentionReplace, self).__init__(prompts, num_steps, cross_replace_steps, self_replace_steps,
                                                tokenizer, device=device)
-        self.mapper = get_replacement_mapper(prompts, tokenizer).to(device)
+        # self.mapper = get_replacement_mapper(prompts, tokenizer).to(device)
 
     def replace_cross_attention(self, attn_base, att_replace):
-        return torch.einsum('hpw,bwn->bhpn', attn_base, self.mapper)
+        # return torch.einsum('hpw,bwn->bhpn', attn_base, self.mapper)
+        return attn_base.unsqueeze(0)

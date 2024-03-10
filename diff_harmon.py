@@ -7,7 +7,8 @@ from torch import optim
 from attentionControl import EmptyControl, AttentionStore
 from utils import view_images, aggregate_attention
 import torchvision
-import random
+from thirdparty.edge_detector import get_edge, Initialize_PidNet, pidnet_args, PidNet
+from torchvision import transforms
 
 
 def init_latent(latent, model, height, width, generator, batch_size):
@@ -39,12 +40,34 @@ def latent2image(vae, latents):
     return image
 
 
+def latent2image_edge_fusion(vae, latents):
+    latents = 1 / 0.18215 * latents
+    image = vae.decode(latents)['sample']
+    image = (image / 2 + 0.5).clamp(0, 1)
+    # normalize the image: mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225]
+    image_edge = image.squeeze(dim=0)
+    image_edge = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])(image_edge)
+    image_edge = image_edge.unsqueeze(dim=0)
+    return image, image_edge
+
+
 def preprocess(image, size):
     image = image.resize((size, size), resample=Image.LANCZOS)
     image = np.array(image).astype(np.float32) / 255.0
     image = image[None].transpose(0, 3, 1, 2)
     image = torch.from_numpy(image)[:, :3, :, :].cuda()
     return 2.0 * image - 1.0
+
+
+def preprocess_pidnet(image, size):
+    image = image.convert('RGB')
+    transform = transforms.Compose([transforms.Resize((size, size)),
+                                    transforms.ToTensor(),
+                                    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                                         std=[0.229, 0.224, 0.225])])
+    image = transform(image)
+    image = image.unsqueeze(dim=0).cuda()
+    return image
 
 
 def encoder(image, model, generator=None, size=512):
@@ -54,7 +77,7 @@ def encoder(image, model, generator=None, size=512):
     return 0.18215 * model.vae.encode(image).latent_dist.sample(generator=gpu_generator)
 
 
-def text_embed_reforward(self, optim_embeddings, position):
+def text_embed_reforward(self, optim_embeddings, position_fg, position_bg):
     def forward(
             input_ids: Optional[torch.LongTensor] = None,
             position_ids: Optional[torch.LongTensor] = None,
@@ -72,10 +95,15 @@ def text_embed_reforward(self, optim_embeddings, position):
         embeddings = inputs_embeds + position_embeddings
 
         '''First step to initialize the embed, then leverage it for replacing in the following steps'''
-        if optim_embeddings == [None]:
-            optim_embeddings[0] = embeddings.detach()[:, position].clone()
+        fg_emb, bg_emb = torch.chunk(embeddings, 2, dim=0)
+        if optim_embeddings == [None, None]:
+            optim_embeddings[0] = [fg_emb.detach()[:, x].clone() for x in position_fg]
+            optim_embeddings[1] = [bg_emb.detach()[:, x].clone() for x in position_bg]
         else:
-            embeddings[:, position] = optim_embeddings
+            for ind, x in enumerate(position_fg):
+                embeddings[:1, x] = optim_embeddings[0][ind]
+            for ind, x in enumerate(position_bg):
+                embeddings[1:, x] = optim_embeddings[1][ind]
 
         return embeddings
 
@@ -207,7 +235,7 @@ def reset_attention_control(model):
 def ddim_reverse_sample(image, prompt, model, num_inference_steps: int = 50, guidance_scale: float = 7.5,
                         generator: Optional[torch.Generator] = None, args=None):
     """
-        === DDIM Inversion (See details in Section 3 `Preliminaries`) ===
+        === DDIM Inversion ===
     """
     batch_size = len(prompt)
 
@@ -259,8 +287,10 @@ def ddim_reverse_sample(image, prompt, model, num_inference_steps: int = 50, gui
     return latents, all_latents
 
 
-def attention_constraint_text_optimization(prompt, model, mask, latent, inversion_latents=None,
-                                           size=512, args=None):
+def attention_constraint_text_optimization(prompt, model, mask, latent, size=512, args=None):
+    """
+    Text Embedding Refinement design. Please refer to Section 3.2 in our paper-v2 for more information.
+    """
     batch_size = len(prompt)
     mask = (torchvision.transforms.Resize([size // 32, size // 32])(mask[0, 0].unsqueeze(0)) > 100 / 255.).float()
     mask = torch.cat([mask, 1 - mask], dim=0)
@@ -281,146 +311,110 @@ def attention_constraint_text_optimization(prompt, model, mask, latent, inversio
     uncond_embeddings.requires_grad_(False)
 
     """Extract the text embeddings"""
-    optim_embeddings = [None]
+    optim_embeddings = [None, None]
 
-    # -2 for the added EOF token. We directly suppose that the environmental text only renders one token.
-    position = len(model.tokenizer.encode(prompt[0])) - 2
+    position_start = len(model.tokenizer.encode(prompt[0].split()[0])) - 1
+    position_end_fg = len(model.tokenizer.encode(prompt[0])) - 2
+    position_end_bg = len(model.tokenizer.encode(prompt[1])) - 2
+    position_fg = [x for x in range(position_start, position_end_fg + 1)]
+    position_bg = [x for x in range(position_start, position_end_bg + 1)]
     model.text_encoder.text_model.embeddings.forward = text_embed_reforward(model.text_encoder.text_model.embeddings,
-                                                                            optim_embeddings, position)
+                                                                            optim_embeddings, position_fg, position_bg)
     model.text_encoder(text_input.input_ids.to(model.device))[0].detach()
 
-    basis_embeddings = optim_embeddings[0].clone()
-    optim_embeddings = optim_embeddings[0].requires_grad_()
+    basis_embeddings_fg = torch.cat(optim_embeddings[0]).clone()
+    basis_embeddings_bg = torch.cat(optim_embeddings[1]).clone()
+    optim_embeddings_fg = [x.requires_grad_() for x in optim_embeddings[0]]
+    optim_embeddings_bg = [x.requires_grad_() for x in optim_embeddings[1]]
 
-    optimizer = optim.AdamW([optim_embeddings], lr=args.op_style_lr if inversion_latents is None else args.tr_style_lr)
+    weight_emb_bg = torch.nn.Parameter(torch.ones(len(position_bg), device=model.device) / len(position_bg))
+
+    optimizer = optim.AdamW(optim_embeddings_fg + optim_embeddings_bg + [weight_emb_bg],
+                            lr=args.op_style_lr)
     loss_func = torch.nn.MSELoss()
 
     model.text_encoder.text_model.embeddings.forward = text_embed_reforward(model.text_encoder.text_model.embeddings,
-                                                                            optim_embeddings, position)
+                                                                            [optim_embeddings_fg, optim_embeddings_bg],
+                                                                            position_fg, position_bg)
     text_embeddings = model.text_encoder(text_input.input_ids.to(model.device))[0]
     context = [uncond_embeddings, text_embeddings]
     context = torch.cat(context)
 
     """
-        For optimizing the text embeddings, we design two implementations: optimizing style and training style.
-        
-        === See details in Appendix B. `Implementation Details` in our paper ===
+        For optimizing the text embeddings, we design two implementations: optimizing style and training style. We here
+        only present optimizing style.
     """
-    if inversion_latents is None:
-        """optimizing style"""
-        latent, latents = init_latent(latent, model, size, size, None, batch_size)
 
-        # Collect all optimized text embeddings in the intermediate diffusion steps.
-        intermediate_optimized_text_embed = []
+    """optimizing style"""
+    latent, latents = init_latent(latent, model, size, size, None, batch_size)
 
-        pbar = tqdm(model.scheduler.timesteps[1:], desc="Optimize_text_embed")
+    # Collect all optimized text embeddings in the intermediate diffusion steps.
+    intermediate_optimized_text_embed = []
 
-        #  The DDIM should begin from 1, as the inversion cannot access X_T but only X_{T-1}
-        for ind, t in enumerate(pbar):
-            for _ in range(args.op_style_iters):
-                controller = AttentionStore()
+    pbar = tqdm(model.scheduler.timesteps[1:], desc="Optimize_text_embed")
 
-                # Change the `forward()` in CrossAttention module of Diffusion Models.
-                register_attention_control(model, controller)
-
-                diffusion_step(model, controller, latents, context, t, 0)
-
-                """For `loss_emb`, please refer to Eq. (3) in our paper."""
-                attention_map_fg = aggregate_attention(prompt, controller, size // 32, ("up", "down"), True, 0)
-                attention_map_bg = aggregate_attention(prompt, controller, size // 32, ("up", "down"), True, 1)
-                attention_map = torch.stack(
-                    [attention_map_fg[:, :, position] / attention_map_fg[:, :, position].max(),
-                     attention_map_bg[:, :, position] / attention_map_bg[:, :, position].max()], dim=0)
-
-                optimizer.zero_grad()
-                loss_emb = loss_func(mask, attention_map.cuda())
-
-                """For `loss_reg`, please refer to Eq. (4) in our paper."""
-                loss_reg = loss_func(optim_embeddings, basis_embeddings) * args.regulation_weight
-                pbar.set_postfix_str(
-                    f"loss: {loss_emb.item() + loss_reg.item()}\ttext_emb_loss: {loss_emb.item()}\treg_loss: {loss_reg.item()}")
-                loss = loss_emb + loss_reg
-
-                loss.backward()
-                optimizer.step()
-
-                model.text_encoder.text_model.embeddings.forward = text_embed_reforward(
-                    model.text_encoder.text_model.embeddings,
-                    optim_embeddings, position)
-                text_embeddings = model.text_encoder(text_input.input_ids.to(model.device))[0]
-                context = [uncond_embeddings, text_embeddings]
-                context = torch.cat(context)
-
-            intermediate_optimized_text_embed.append(text_embeddings.detach().clone())
-
-            with torch.no_grad():
-                latents = diffusion_step(model, EmptyControl(), latents, context, t, 0)
-
-        # reset the `forward()` functions.
-        reset_attention_control(model)
-        model.text_encoder.text_model.embeddings.forward = reset_text_embed_reforward(
-            model.text_encoder.text_model.embeddings)
-
-        return intermediate_optimized_text_embed
-
-    else:
-        """"training style"""
-        display_loss = 0
-        display_reg_loss = 0
-        time_list = model.scheduler.timesteps[1:]
-        time_batch = args.tr_style_batch_size
-        iterations = time_batch * args.tr_style_iters
-        optimizer.zero_grad()
-        for ind in tqdm(range(iterations)):
-            # Training is similar to the default training pipeline of Diffusion Models: Random select a timestep t.
-            t = random.randint(0, len(time_list) - 1)
-            latent = inversion_latents[t]
-            latent, latents = init_latent(latent, model, size, size, None, batch_size)
-
+    #  The DDIM should begin from 1, as the inversion cannot access X_T but only X_{T-1}
+    for ind, t in enumerate(pbar):
+        for _ in range(args.op_style_iters):
             controller = AttentionStore()
 
+            # Change the `forward()` in CrossAttention module of Diffusion Models.
             register_attention_control(model, controller)
 
             diffusion_step(model, controller, latents, context, t, 0)
 
-            """For `loss_emb`, please refer to Eq. (3) in our paper."""
-            attention_map_fg = aggregate_attention(prompt, controller, size // 32, ("up", "down"), True, 0)
-            attention_map_bg = aggregate_attention(prompt, controller, size // 32, ("up", "down"), True, 1)
-            attention_map = torch.stack(
-                [attention_map_fg[:, :, position] / attention_map_fg[:, :, position].max(),
-                 attention_map_bg[:, :, position] / attention_map_bg[:, :, position].max()], dim=0)
+            """For loss function calculation, please refer to Eq. 2~4 in our paper."""
+            attention_map_fg = aggregate_attention(prompt, controller, size // 32, ("up", "down"), True, 0).cuda()
+            attention_map_bg = aggregate_attention(prompt, controller, size // 32, ("up", "down"), True, 1).cuda()
+            optimizer.zero_grad()
+            loss_emb = 0
+            attention_map = 0
+            for ind, idd in enumerate(position_fg):
+                attention_map += attention_map_fg[:, :, idd]
 
-            loss_emb = loss_func(mask, attention_map.cuda())
+            loss_emb += loss_func(mask[0], (attention_map / attention_map.max()))
 
-            """For `loss_reg`, please refer to Eq. (4) in our paper."""
-            loss_reg = loss_func(optim_embeddings, basis_embeddings) * args.regulation_weight
+            attention_map = 0
+            for ind, idd in enumerate(position_bg):
+                attention_map += attention_map_bg[:, :, idd] * weight_emb_bg[ind]
+
+            loss_emb += loss_func(mask[1], (attention_map / attention_map.max()))
+
+            """For `loss_reg`, please refer to Eq. (3) in our paper."""
+            loss_reg = (loss_func(torch.cat(optim_embeddings_fg), basis_embeddings_fg) + loss_func(
+                torch.cat(optim_embeddings_bg), basis_embeddings_bg)) * args.regulation_weight
+            pbar.set_postfix_str(
+                f"loss: {loss_emb.item() + loss_reg.item()}\ttext_emb_loss: {loss_emb.item()}\treg_loss: {loss_reg.item()}")
             loss = loss_emb + loss_reg
 
-            loss /= time_batch
             loss.backward()
-
-            display_loss += loss.item()
-            display_reg_loss += loss_reg.item()
-            if (ind + 1) % time_batch == 0:
-                optimizer.step()
-                optimizer.zero_grad()
-                print("loss: ", display_loss * time_batch / (ind + 1), "\ttext_emb_loss: ",
-                      (display_loss - display_reg_loss / time_batch) * time_batch / (ind + 1), "\treg_loss: ",
-                      display_reg_loss / (ind + 1))
+            optimizer.step()
 
             model.text_encoder.text_model.embeddings.forward = text_embed_reforward(
                 model.text_encoder.text_model.embeddings,
-                optim_embeddings, position)
+                optim_embeddings, position_fg, position_bg)
             text_embeddings = model.text_encoder(text_input.input_ids.to(model.device))[0]
             context = [uncond_embeddings, text_embeddings]
             context = torch.cat(context)
 
-        all_text_embed = [text_embeddings.detach().clone()] * len(time_list)
+            with torch.no_grad():
+                weight_emb_bg.data = torch.nn.functional.softmax(weight_emb_bg, dim=0).data
 
-        reset_attention_control(model)
-        model.text_encoder.text_model.embeddings.forward = reset_text_embed_reforward(
-            model.text_encoder.text_model.embeddings)
-        return all_text_embed
+        fuse_emb = (text_embeddings[1, position_bg, :].detach().clone()) * weight_emb_bg.unsqueeze(1)
+        fuse_emb = fuse_emb.sum(0).unsqueeze(0)
+        text_embeddings[1, position_bg, :] = fuse_emb
+
+        intermediate_optimized_text_embed.append(text_embeddings.detach().clone())
+
+        with torch.no_grad():
+            latents = diffusion_step(model, EmptyControl(), latents, context, t, 0)
+
+    # reset the `forward()` functions.
+    reset_attention_control(model)
+    model.text_encoder.text_model.embeddings.forward = reset_text_embed_reforward(
+        model.text_encoder.text_model.embeddings)
+
+    return intermediate_optimized_text_embed
 
 
 @torch.enable_grad()
@@ -436,26 +430,36 @@ def run(
         mask=None,
         size=512,
         args=None,
+        original_image=None,
 ):
     """
-        The whole pipeline can be viewed as three steps:
-        (See the overview in the beginning paragraphs of Section 4 in our paper)
+        Below are the scripts related to Section 3.2 in our paper-v2
 
         Step 1: Optimize the text conditional embeddings to ensure the text embedding can well describe the
-                foreground/background environment. (See Section 4.1 in our paper)
-        Step 2: Based on the optimized text embedding, optimize the unconditional embeddings to ensure the
-                optimized text embeddings can reconstruct the initial image. (See Null-Text https://arxiv.org/abs/2211.09794)
-                Note that Step 2 cannot be placed before Step 1, or there will be no any benefit on the content preservation.
+                foreground/background environment. (See `Text Embedding Refinement` in our Sec. 3.2)
+        Step 2: Based on the optimized text embedding, optimize the unconditional embeddings to align the edge maps from
+                sobel and PidNet and also ensure the optimized text embeddings can reconstruct the initial image. (See
+                Null-Text https://arxiv.org/abs/2211.09794) Note that Step 2 cannot be placed before Step 1, or there
+                will be no any benefit on the content preservation. (See `Content Structure Preservation` in our Sec. 3.2)
         Step 3: Leverage the prompt-to-prompt technique (https://arxiv.org/abs/2208.01626) to harmonize the images. The
                 core of this step is to fix the cross-attention maps corresponding to foreground text, and then replace
                 the foreground text embeddings with the background ones. For content retention, we also fix the self-attention
-                maps. (See Section 4.2 in our paper)
+                maps. (See `Foreground Editing` and `Content Structure Preservation` in our Sec. 3.2)
     """
 
     """Detach Diffusion Model parameters to save memory."""
     model.vae.requires_grad_(False)
     model.text_encoder.requires_grad_(False)
     model.unet.requires_grad_(False)
+
+    """Original mask"""
+    original_mask = mask.resize((size, size), resample=Image.LANCZOS)
+    original_mask = np.array(original_mask).astype(np.float32) / 255.0
+    if len(original_mask.shape) == 2:
+        original_mask = original_mask[:, :, None]
+    original_mask = original_mask[None].transpose(0, 3, 1, 2)
+    original_mask = torch.from_numpy(original_mask[:, 0:1])
+    original_mask = (original_mask > 100 / 255.).float().to(latent.device)
 
     """Resize the mask to the size of the latent space"""
     mask = mask.resize(latent.shape[-2:], resample=Image.LANCZOS)
@@ -469,23 +473,21 @@ def run(
     """
         Step 1
         
-        Optimize Attention-Constraint Text Embedding to ensure the text embedding can well describe the 
-        foreground/background environment.
+        Optimize Text Embedding to ensure the text embedding can well describe the foreground/background environment.
         
-        === See details in Section 4.1 `Attention-Constraint Text` in our paper. ===
+        === See details in Section 3.2 `Text Embedding Refinement` in our paper-v2. ===
     """
     constraint_text_emb = attention_constraint_text_optimization(init_prompt, model, mask, latent,
-                                                                 inversion_latents=None if args.text_optimization_style == 'optimize' else inversion_latents,
                                                                  size=size, args=args)
 
     """
         Step 2
     
-        Optimize a better unconditional embedding that can reconstruct the original image, which follows 
-        `Null-text inversion for editing real images using guided diffusion models` (https://arxiv.org/abs/2211.09794).
-        This is to help preserve the original image content structure.
+        Optimize a better unconditional embedding that can align the edge maps from sobel and PidNet and also reconstruct 
+        the original image. The optimization follows `Null-text inversion for editing real images using guided diffusion models` 
+        (https://arxiv.org/abs/2211.09794).
         
-        === See details in the beginning of Section 4 `Method`in our paper ===
+        === See details in the beginning of Section 3.2 `Content Structure Preservation`in our paper-v2 ===
     """
     prompt = [init_prompt[0]]  # Only use the first prompt, which describes the foreground.
     batch_size = len(prompt)
@@ -516,13 +518,28 @@ def run(
     # Collect all optimized unconditional embeddings in the intermediate diffusion steps.
     intermediate_optimized_uncond_emb = []
 
+    # Calculate the original's edge map.
+    pidnet = Initialize_PidNet(pidnet_args)
+    original_edge = PidNet(pidnet, preprocess_pidnet(original_image, 512))
+    original_sobel = get_edge(preprocess(original_image, 512))
+
     #  The DDIM should begin from 1, as the inversion cannot access X_T but only X_{T-1}
     for ind, t in enumerate(tqdm(model.scheduler.timesteps[1:], desc="Optimize_uncond_embed")):
         for _ in range(ind // 10 + 1):
             out_latents = diffusion_step(model, EmptyControl(), latents, context, t, guidance_scale)
 
+            image_sobel, image_edge = latent2image_edge_fusion(model.vae, out_latents)
+
+            # Calculate the harmonized image's edge maps.
+            out_edge = PidNet(pidnet, image_edge)
+            out_sobel = get_edge(image_sobel)
+
             optimizer.zero_grad()
-            loss = loss_func(out_latents, inversion_latents[ind + 1])
+            loss_null_text = loss_func(out_latents, inversion_latents[ind + 1])
+            loss_edge_all = 0.1 * loss_func(out_edge * original_mask, original_edge * original_mask) + loss_func(
+                out_sobel * original_mask, original_sobel * original_mask)
+            loss = 10 * loss_null_text + (loss_edge_all if args.use_edge_map else 0)
+
             loss.backward()
             optimizer.step()
 
@@ -541,7 +558,7 @@ def run(
         After getting the optimized text embeddings, we can use them to harmonize the image. The technique used here is
         prompt to prompt (https://arxiv.org/abs/2208.01626).
 
-        === See details in the beginning of Section 4 `Method`in our paper ===
+        === See details in `Foreground Editing` of Section 3.2 in our paper-v2 ===
     """
     # Change the `forward()` in CrossAttention module of Diffusion Models.
     register_attention_control(model, controller)
