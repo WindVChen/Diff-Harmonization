@@ -251,7 +251,7 @@ if __name__ == "__main__":
                         type=str,
                         help='Set the path to `stabilityai/stable-diffusion-2-base`.')
     parser.add_argument('--harmonize_iterations', default=10, type=int, help='How many times to harmonize the images')
-    parser.add_argument('--is_single_image', action='store_false', help='Whether to test on a single image or images')
+    parser.add_argument('--is_single_image', action='store_true', help='Whether to test on a single image or images')
     parser.add_argument('--use_edge_map', action='store_true', help='Whether to use edge maps')
     parser.add_argument('--use_evaluator', action='store_true', help='Whether to automatically pick results')
 
