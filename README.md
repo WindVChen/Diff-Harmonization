@@ -19,12 +19,16 @@
 
 ### Share us a :star: if this repo does help
 
-This is the official repository of ***Diff-Harmonization***. If you encounter any question, please feel free to contact us. You can create an issue or just send email to me windvchen@gmail.com. Also welcome for any idea exchange and discussion.
+This is the official repository of ***Diff-Harmonization***. The newest version of the paper can be accessed in [[IEEE](https://ieeexplore.ieee.org/abstract/document/10858769)], the previous version of the paper can be accessed in [[arXiv](https://arxiv.org/abs/2307.08182)]. ***(Accepted by TMM 2025)***
+
+If you encounter any question, please feel free to contact us. You can create an issue or just send email to me windvchen@gmail.com. Also welcome for any idea exchange and discussion.
 
 BTW:
 You may wish to pay attention to our another work 😊[***INR-Harmonization***](https://github.com/WindVChen/INR-Harmonization). It is **the first dense pixel-to-pixel method applicable to high-resolution (*~6K*) images** without any hand-crafted filter design, based on *Implicit Neural Representation*,.
 
 ## Updates
+
+[**02/06/2025**] This paper has been accepted by **TMM 2025**.
 
 [**03/10/2024**] Release the version 2 of our paper (access it from [here](https://arxiv.org/abs/2307.08182), previous paper can still be accessed from [here](https://arxiv.org/abs/2307.08182v1)), together with the code! 🧐🧐 In this new version, we mainly have these updates:
 
@@ -139,12 +143,16 @@ python main.py --harmonize_iterations 10 --save_dir "./output" --images_root "./
 ## Citation & Acknowledgments
 If you find this paper useful in your research, please consider citing:
 ```
-@article{chen2023zero,
-  title={Zero-Shot Image Harmonization with Generative Model Prior},
-  author={Chen, Jianqi and Zou, Zhengxia and Zhang, Yilan and Chen, Keyan and Shi, Zhenwei},
-  journal={arXiv preprint arXiv:2307.08182},
-  year={2023}
-}
+@ARTICLE{10858769,
+  author={Chen, Jianqi and Zhang, Yilan and Zou, Zhengxia and Chen, Keyan and Shi, Zhenwei},
+  journal={IEEE Transactions on Multimedia}, 
+  title={Zero-Shot Image Harmonization with Generative Model Prior}, 
+  year={2025},
+  volume={},
+  number={},
+  pages={1-15},
+  keywords={Imaging;Training;Text to image;Image color analysis;Image edge detection;Image segmentation;Visualization;Solid modeling;Costs;Transforms;Image harmonization;image composition;diffusion model;zero-shot method},
+  doi={10.1109/TMM.2025.3535343}}
 ```
 
 Also thanks for the open source code of [Prompt-to-Prompt](https://github.com/google/prompt-to-prompt). Some of our codes are based on them.
