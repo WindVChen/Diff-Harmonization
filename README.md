@@ -90,7 +90,7 @@ We propose a zero-shot approach to image harmonization, aiming to overcome the r
    - For automatically generating captions, please run [gemini_mini_vision.py](gemini_mini_vision.py). Remember to modify the variables like `api_key`, `images_root`, `masks_root`, etc., in advance.
 
 4. Pre-trained Models
-   - We adopt `Stable Diffusion 2.0` as our diffusion model, you can load the pretrained weight by setting `pretrained_diffusion_path="stabilityai/stable-diffusion-2-base"` in [main.py](main.py).
+   - We adopt `Stable Diffusion 2.0` as our diffusion model. **Note:** The original `stabilityai/stable-diffusion-2-base` repository has been retracted or set to private on HuggingFace. You can use the alternative backed-up repository by setting `pretrained_diffusion_path="Manojb/stable-diffusion-2-base"` [main.py](main.py), or use the original path if it becomes available again.
 
 ## Harmonizing
 
@@ -101,7 +101,7 @@ The code supports either harmonize a single image, or harmonize a bunch of image
 ### Harmonize a single image
 
 ```bash
-python main.py --harmonize_iterations 10 --save_dir "./output" --is_single_image --image_path "./demo/girl_comp.jpg" --mask_path "./demo/girl_mask.jpg" --foreground_prompt "girl autumn" --background_prompt "girl winter" --pretrained_diffusion_path "stabilityai/stable-diffusion-2-base" --use_edge_map
+python main.py --harmonize_iterations 10 --save_dir "./output" --is_single_image --image_path "./demo/girl_comp.jpg" --mask_path "./demo/girl_mask.jpg" --foreground_prompt "girl autumn" --background_prompt "girl winter" --pretrained_diffusion_path "Manojb/stable-diffusion-2-base" --use_edge_map
 ```
 
 - `--harmonize_iterations`: the iterations' number of harmonization loop. This will be aligned with the results' number saved in the output directory.
@@ -119,7 +119,7 @@ python main.py --harmonize_iterations 10 --save_dir "./output" --is_single_image
 ### Harmonize a bunch of images
 
 ```bash
-python main.py --harmonize_iterations 10 --save_dir "./output" --images_root "./demo/composite" --mask_path "./demo/mask" --caption_txt "./demo/caption.txt" --pretrained_diffusion_path "stabilityai/stable-diffusion-2-base" --use_edge_map
+python main.py --harmonize_iterations 10 --save_dir "./output" --images_root "./demo/composite" --mask_path "./demo/mask" --caption_txt "./demo/caption.txt" --pretrained_diffusion_path "Manojb/stable-diffusion-2-base" --use_edge_map
 ```
 
 - `--harmonize_iterations`: the iterations' number of harmonization loop. This will be aligned with the results' number saved in the output directory.

@@ -246,8 +246,10 @@ if __name__ == "__main__":
 
     parser.add_argument('--save_dir', default="./output", type=str,
                         help='Where to save the results')
+    # Note: The original stabilityai/stable-diffusion-2-base has been retracted or set to private on HuggingFace,
+    # so we use Manojb/stable-diffusion-2-base as an alternative backed-up repository.
     parser.add_argument('--pretrained_diffusion_path',
-                        default="stabilityai/stable-diffusion-2-base",
+                        default="Manojb/stable-diffusion-2-base",
                         type=str,
                         help='Set the path to `stabilityai/stable-diffusion-2-base`.')
     parser.add_argument('--harmonize_iterations', default=10, type=int, help='How many times to harmonize the images')
